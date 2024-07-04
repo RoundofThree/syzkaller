@@ -175,6 +175,16 @@ func GetEx(OS, arch string, clang bool) *Target {
 	return target.other
 }
 
+func GetCFlags(arch string) []string {
+	prefix := "CFLAGS_"
+	archCFlags := os.Getenv(prefix + strings.ToUpper(arch))
+	if archCFlags == "" {
+		return []string{}
+	} else {
+		return strings.Split(archCFlags, " ")
+	}
+}
+
 // nolint: lll
 var List = map[string]map[string]*Target{
 	TestOS: {
@@ -342,7 +352,8 @@ var List = map[string]map[string]*Target{
 			PtrSize:   8,
 			PageSize:  4 << 10,
 			CCompiler: "clang",
-			CFlags:    []string{"-m64", "--target=aarch64-unknown-freebsd14.0"},
+			CFlags:    GetCFlags("arm64"),
+			// CFlags:    []string{"-m64", "--target=aarch64-unknown-freebsd14.0"},
 			NeedSyscallDefine: func(nr uint64) bool {
 				// freebsd_12_shm_open, shm_open2, shm_rename, __realpathat, close_range, copy_file_range
 				return nr == 482 || nr >= 569
