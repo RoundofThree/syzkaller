@@ -31,6 +31,9 @@ type Config struct {
 	HostIP  string `json:"hostip"`  // VM host IP address
 	Mem     string `json:"mem"`     // amount of VM memory
 	Dataset string `json:"dataset"` // ZFS dataset containing VM image
+	UBoot   string `json:"uboot"`   // location of u-boot binary
+	Tapdev  string `json:"tapdev"`  // tap interface, optional
+	Forward bool   `json:"sshforward"`
 }
 
 type Pool struct {
@@ -54,6 +57,7 @@ type instance struct {
 	vmName      string
 	bhyve       *exec.Cmd
 	consolew    io.WriteCloser
+	sshforward  bool
 }
 
 var ipRegex = regexp.MustCompile(`bound to (([0-9]+\.){3}[0-9]+) `)
@@ -64,6 +68,7 @@ func ctor(env *vmimpl.Env) (vmimpl.Pool, error) {
 		Count: 1,
 		CPU:   1,
 		Mem:   "512M",
+		Forward: true,
 	}
 	if err := config.LoadData(env.Config, cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse bhyve vm config: %w", err)
@@ -131,17 +136,24 @@ func (pool *Pool) Create(workdir string, index int) (vmimpl.Instance, error) {
 		return nil, err
 	}
 
-	if inst.cfg.Bridge != "" {
-		tapdev, err := osutil.RunCmd(time.Minute, "", "ifconfig", "tap", "create")
-		if err != nil {
-			inst.Close()
-			return nil, err
-		}
-		inst.tapdev = tapRegex.FindString(string(tapdev))
-		if _, err := osutil.RunCmd(time.Minute, "", "ifconfig", inst.cfg.Bridge, "addm", inst.tapdev); err != nil {
-			inst.Close()
-			return nil, err
-		}
+	// Best not to mess with interfaces
+	// If I want to I will do it myself
+
+	// if inst.cfg.Bridge != "" {
+	// 	tapdev, err := osutil.RunCmd(time.Minute, "", "ifconfig", "tap", "create")
+	// 	if err != nil {
+	// 		inst.Close()
+	// 		return nil, err
+	// 	}
+	// 	inst.tapdev = tapRegex.FindString(string(tapdev))
+	// 	if _, err := osutil.RunCmd(time.Minute, "", "ifconfig", inst.cfg.Bridge, "addm", inst.tapdev); err != nil {
+	// 		inst.Close()
+	// 		return nil, err
+	// 	}
+	// }
+
+	if inst.cfg.Tapdev != "" {
+		inst.tapdev = inst.cfg.Tapdev
 	}
 
 	if err := inst.Boot(); err != nil {
@@ -149,25 +161,27 @@ func (pool *Pool) Create(workdir string, index int) (vmimpl.Instance, error) {
 		return nil, err
 	}
 
+	inst.sshforward = inst.cfg.Forward
+
 	return inst, nil
 }
 
 func (inst *instance) Boot() error {
-	loaderArgs := []string{
-		"-c", "stdio",
-		"-m", inst.cfg.Mem,
-		"-d", inst.image,
-		"-e", "autoboot_delay=0",
-		inst.vmName,
-	}
+	// loaderArgs := []string{
+	// 	"-c", "stdio",
+	// 	"-m", inst.cfg.Mem,
+	// 	"-d", inst.image,
+	// 	"-e", "autoboot_delay=0",
+	// 	inst.vmName,
+	// }
 
 	// Stop the instance from the previous run in case it's still running.
 	osutil.RunCmd(time.Minute, "", "bhyvectl", "--destroy", fmt.Sprintf("--vm=%v", inst.vmName))
 
-	_, err := osutil.RunCmd(time.Minute, "", "bhyveload", loaderArgs...)
-	if err != nil {
-		return err
-	}
+	// _, err := osutil.RunCmd(time.Minute, "", "bhyveload", loaderArgs...)
+	// if err != nil {
+	// 	return err
+	// }
 
 	netdev := ""
 	if inst.tapdev != "" {
@@ -179,16 +193,20 @@ func (inst *instance) Boot() error {
 	}
 
 	bhyveArgs := []string{
-		"-H", "-A", "-P",
+	//	"-H", "-A", "-P", // Untested on morello
 		"-c", fmt.Sprintf("%d", inst.cfg.CPU),
 		"-m", inst.cfg.Mem,
 		"-s", "0:0,hostbridge",
-		"-s", "1:0,lpc",
+	//	"-s", "1:0,lpc",
 		"-s", fmt.Sprintf("2:0,virtio-net,%v", netdev),
-		"-s", fmt.Sprintf("3:0,virtio-blk,%v", inst.image),
-		"-l", "com1,stdio",
+		"-s", fmt.Sprintf("1:0,virtio-blk,%v", inst.image), // virtio order flipped to prevent bhyve assertion fail
+	//	"-l", "com1,stdio",
+		"-o", fmt.Sprintf("bootrom=%v", inst.cfg.UBoot),
+		"-o", "console=stdio",
 		inst.vmName,
 	}
+
+	log.Logf(0, "bhyve args: %v", bhyveArgs)
 
 	outr, outw, err := osutil.LongPipe()
 	if err != nil {
@@ -290,14 +308,14 @@ func (inst *instance) Close() {
 		osutil.RunCmd(time.Minute, "", "zfs", "destroy", "-R", inst.snapshot)
 		inst.snapshot = ""
 	}
-	if inst.tapdev != "" {
-		osutil.RunCmd(time.Minute, "", "ifconfig", inst.tapdev, "destroy")
-		inst.tapdev = ""
-	}
+	// if inst.tapdev != "" {
+	// 	osutil.RunCmd(time.Minute, "", "ifconfig", inst.tapdev, "destroy")
+	// 	inst.tapdev = ""
+	// }
 }
 
 func (inst *instance) Forward(port int) (string, error) {
-	if inst.tapdev != "" {
+	if inst.tapdev != "" && !inst.sshforward {
 		return fmt.Sprintf("%v:%v", inst.cfg.HostIP, port), nil
 	} else {
 		if port == 0 {
