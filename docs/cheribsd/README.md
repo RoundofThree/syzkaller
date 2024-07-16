@@ -1,6 +1,6 @@
 # CheriBSD
 
-This page contains instructions to set up syzkaller to run on a CheriBSD host (tested on hybrid) and fuzz a CheriBSD purecap kernel running under bhyve. Most of this document is copied from the guide for [FreeBSD](../freebsd/README.md), with a few adjustments for CheriBSD.
+This page contains instructions to set up syzkaller to run on a CheriBSD host (tested on hybrid) and fuzz a CheriBSD purecap kernel running under bhyve. Most of this document is copied from the guide for [FreeBSD](docs/freebsd/README.md), with a few adjustments for CheriBSD.
 
 ## Prerequisites
 
@@ -38,7 +38,7 @@ export GODEBUG=asyncpreemptoff=1
 
 All commands using `sudo` can include `-E` to let `sudo` include this environment variable.
 
-## Generating constants
+## Regenerating constants (Optional)
 
 In the following commands, take note to replace CHERIBSD_SRC with the path to the CheriBSD source code.
 
@@ -67,7 +67,7 @@ $ gmake bin/syz-extract
 $ CFLAGS_ARM64='--config ./test.cfg' bin/syz-extract -build -os=freebsd -sourcedir=$CHERIBSD_SRC -arch=arm64
 ```
 
-Finally, run the Python script as follows to avoid a [known issue](https://groups.google.com/g/syzkaller/c/5RZxwRuh6Qg/m/P1wWy6C7BgAJ). Instead of regenerating constants for all archs, the script just works around the issue by patching existing constant files to make it appear as if they can be used for all archs.
+Finally, run the Python script as follows to avoid a [known issue](https://github.com/google/syzkaller/issues/2749#issuecomment-916875126). Instead of regenerating constants for all archs, the script just works around the issue by patching existing constant files to make it appear as if they can be used for all archs.
 
 ```console
 $ python fixconst.py
@@ -163,7 +163,7 @@ $ bin/syz-manager -config morello-bhyve.cfg
 ```
 It should start printing output along the lines of:
 ```
-11:19:27 serving http on http://:10000
+serving http on http://:10000
 serving rpc on tcp://32720
 booting test machines...
 wait for the connection from test machine...
