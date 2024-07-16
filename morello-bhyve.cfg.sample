@@ -9,7 +9,6 @@
 	"procs": 1,
 	"image": "<PATH TO IMAGE FILE ON ZFS>",
 	"type": "bhyve",
-	# More investigation needed
 	"kernel_obj": "<KERNEL OBJECTS>",
 	"vm": {
 		"count": 1,

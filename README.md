@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 `syzkaller` (`[siːzˈkɔːlə]`) is an unsupervised coverage-guided kernel fuzzer.\
-Supported OSes: `FreeBSD`, `Fuchsia`, `gVisor`, `Linux`, `NetBSD`, `OpenBSD`, `Windows`.
+Supported OSes: `CheriBSD` (still in development), `FreeBSD`, `Fuchsia`, `gVisor`, `Linux`, `NetBSD`, `OpenBSD`, `Windows`.
 
 Mailing list: [syzkaller@googlegroups.com](https://groups.google.com/forum/#!forum/syzkaller) (join on [web](https://groups.google.com/forum/#!forum/syzkaller) or by [email](mailto:syzkaller+subscribe@googlegroups.com)).
 
@@ -18,6 +18,9 @@ Found bugs: [Darwin/XNU](docs/darwin/README.md), [FreeBSD](docs/freebsd/found_bu
 
 Initially, syzkaller was developed with Linux kernel fuzzing in mind, but now
 it's being extended to support other OS kernels as well.
+
+For this fork, take a look at documentation on the [CheriBSD](docs/cheribsd/README.md) kernel.
+
 Most of the documentation at this moment is related to the [Linux](docs/linux/setup.md) kernel.
 For other OS kernels check:
 [Darwin/XNU](docs/darwin/README.md),
