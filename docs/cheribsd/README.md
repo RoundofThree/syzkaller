@@ -1,6 +1,6 @@
 # CheriBSD
 
-This page contains instructions to set up syzkaller to run on a CheriBSD host (tested on hybrid) and fuzz a CheriBSD purecap kernel running under bhyve. Most of this document is copied from the guide for [FreeBSD](docs/freebsd/README.md), with a few adjustments for CheriBSD.
+This page contains instructions to set up syzkaller to run on a CheriBSD host (tested on hybrid) and fuzz a CheriBSD purecap kernel running under bhyve. Most of this document is copied from the guide for [FreeBSD](../freebsd/README.md), with a few adjustments for CheriBSD.
 
 ## Prerequisites
 
