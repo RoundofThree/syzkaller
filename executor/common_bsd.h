@@ -121,7 +121,7 @@ static int tunfd = -1;
 #if GOOS_netbsd
 // Increased number of tap and tun devices if image script is used
 #define MAX_TUN 64
-#elif GOOS_freebsd
+#elif GOOS_freebsd || GOOS_cheribsd
 // The maximum number of tun devices is limited by the way IP addresses
 // are assigned. Based on this, the limit is 256.
 #define MAX_TUN 256
@@ -219,7 +219,7 @@ static void initialize_tun(int tun_id)
 #endif
 
 	tunfd = open(tun_device, O_RDWR | O_NONBLOCK);
-#if GOOS_freebsd
+#if GOOS_freebsd || GOOS_cheribsd
 	if ((tunfd < 0) && (errno == ENOENT)) {
 		execute_command(0, "kldload -q if_tap");
 		tunfd = open(tun_device, O_RDWR | O_NONBLOCK);
@@ -350,7 +350,7 @@ struct tcp_resources {
 	uint32 ack;
 };
 
-#if GOOS_freebsd || GOOS_darwin
+#if GOOS_freebsd || GOOS_cheribsd || GOOS_darwin
 #include <net/ethernet.h>
 #else
 #include <net/ethertypes.h>
@@ -438,7 +438,7 @@ static void sandbox_common()
 
 	// Some minimal sandboxing.
 	struct rlimit rlim;
-#ifdef GOOS_freebsd
+#if GOOS_freebsd || GOOS_cheribsd
 	// This also causes ENOMEM on NetBSD during early init.
 	rlim.rlim_cur = rlim.rlim_max = 128 << 20;
 	setrlimit(RLIMIT_AS, &rlim);

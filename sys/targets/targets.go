@@ -123,15 +123,16 @@ type Timeouts struct {
 }
 
 const (
-	FreeBSD = "freebsd"
-	Darwin  = "darwin"
-	Fuchsia = "fuchsia"
-	Linux   = "linux"
-	NetBSD  = "netbsd"
-	OpenBSD = "openbsd"
-	TestOS  = "test"
-	Trusty  = "trusty"
-	Windows = "windows"
+	FreeBSD  = "freebsd"
+	Darwin   = "darwin"
+	Fuchsia  = "fuchsia"
+	Linux    = "linux"
+	NetBSD   = "netbsd"
+	OpenBSD  = "openbsd"
+	TestOS   = "test"
+	Trusty   = "trusty"
+	Windows  = "windows"
+	CheriBSD = "cheribsd"
 
 	// These are VM types, but we put them here to prevent string duplication.
 	GVisor  = "gvisor"
@@ -150,6 +151,9 @@ const (
 	TestArch64Fork = "64_fork"
 	TestArch32     = "32"
 	TestArch32Fork = "32_fork"
+
+	MorelloHybrid  = "morello_hybrid"
+	MorelloPurecap = "morello_purecap"
 )
 
 func Get(OS, arch string) *Target {
@@ -183,6 +187,14 @@ func GetCFlags(arch string) []string {
 	} else {
 		return strings.Split(archCFlags, " ")
 	}
+}
+
+var cheriArgs []string = []string{
+	"--target=aarch64-unknown-freebsd15",
+	"-mcpu=rainier",
+	"-march=morello",
+	"-Xclang",
+	"-morello-vararg=new",
 }
 
 // nolint: lll
@@ -352,8 +364,7 @@ var List = map[string]map[string]*Target{
 			PtrSize:   8,
 			PageSize:  4 << 10,
 			CCompiler: "clang",
-			CFlags:    GetCFlags("arm64"),
-			// CFlags:    []string{"-m64", "--target=aarch64-unknown-freebsd14.0"},
+			CFlags:    []string{"-m64", "--target=aarch64-unknown-freebsd14.0"},
 			NeedSyscallDefine: func(nr uint64) bool {
 				// freebsd_12_shm_open, shm_open2, shm_rename, __realpathat, close_range, copy_file_range
 				return nr == 482 || nr >= 569
@@ -478,6 +489,29 @@ var List = map[string]map[string]*Target{
 			NeedSyscallDefine: dontNeedSyscallDefine,
 		},
 	},
+	CheriBSD: {
+		MorelloHybrid: {
+			PtrSize:   8,
+			PageSize:  4 << 10,
+			CCompiler: "clang",
+			CFlags:    append(append(cheriArgs, "-mabi=aapcs"), GetCFlags(MorelloHybrid)...),
+			NeedSyscallDefine: func(nr uint64) bool {
+				// freebsd_12_shm_open, shm_open2, shm_rename, __realpathat, close_range, copy_file_range
+				return nr == 482 || nr >= 569
+			},
+		},
+		MorelloPurecap: {
+			PtrSize:   8, // Temporary
+			PageSize:  4 << 10,
+			CCompiler: "clang",
+			CFlags:    append(append(cheriArgs, "-mabi=purecap"), GetCFlags(MorelloPurecap)...),
+			// CFlags:    []string{"-m64", "--target=aarch64-unknown-freebsd14.0"},
+			NeedSyscallDefine: func(nr uint64) bool {
+				// freebsd_12_shm_open, shm_open2, shm_rename, __realpathat, close_range, copy_file_range
+				return nr == 482 || nr >= 569
+			},
+		},
+	},
 }
 
 var oses = map[string]osCommon{
@@ -497,6 +531,25 @@ var oses = map[string]osCommon{
 		cflags: []string{"-static-pie"},
 	},
 	FreeBSD: {
+		SyscallNumbers:         true,
+		Int64SyscallArgs:       true,
+		SyscallPrefix:          "SYS_",
+		ExecutorUsesForkServer: true,
+		KernelObject:           "kernel.full",
+		CPP:                    "g++",
+		// FreeBSD is missing toolchain support for static PIEs.
+		cflags: []string{
+			"-static",
+			"-lc++",
+			// For some configurations -no-pie is passed to the compiler,
+			// which is not used by clang.
+			// Ensure clang does not complain about it.
+			"-Wno-unused-command-line-argument",
+		},
+	},
+	// Copy of above
+	CheriBSD: {
+		BuildOS:                FreeBSD,
 		SyscallNumbers:         true,
 		Int64SyscallArgs:       true,
 		SyscallPrefix:          "SYS_",

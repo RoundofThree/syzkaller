@@ -28,7 +28,7 @@ static void os_init(int argc, char** argv, void* data, size_t data_size)
 #endif
 
 	int flags = MAP_ANON | MAP_PRIVATE | MAP_FIXED;
-#if GOOS_freebsd
+#if GOOS_freebsd || GOOS_cheribsd
 	// Fail closed if the chosen data offset conflicts with an existing mapping.
 	flags |= MAP_EXCL;
 #endif
@@ -68,7 +68,7 @@ static void cover_open(cover_t* cov, bool extra)
 		failmsg("failed to dup cover fd", "from=%d, to=%d", fd, cov->fd);
 	close(fd);
 
-#if GOOS_freebsd
+#if GOOS_freebsd || GOOS_cheribsd
 	if (ioctl(cov->fd, KIOSETBUFSIZE, kCoverSize))
 		fail("ioctl init trace write failed");
 	cov->mmap_alloc_size = kCoverSize * KCOV_ENTRY_SIZE;
@@ -120,7 +120,7 @@ static void cover_mmap(cover_t* cov)
 
 static void cover_protect(cover_t* cov)
 {
-#if GOOS_freebsd
+#if GOOS_freebsd || GOOS_cheribsd
 	size_t mmap_alloc_size = kCoverSize * KCOV_ENTRY_SIZE;
 	long page_size = sysconf(_SC_PAGESIZE);
 	if (page_size > 0)
@@ -139,7 +139,7 @@ static void cover_protect(cover_t* cov)
 
 static void cover_unprotect(cover_t* cov)
 {
-#if GOOS_freebsd
+#if GOOS_freebsd || GOOS_cheribsd
 	size_t mmap_alloc_size = kCoverSize * KCOV_ENTRY_SIZE;
 	mprotect(cov->data, mmap_alloc_size, PROT_READ | PROT_WRITE);
 #elif GOOS_openbsd
@@ -151,7 +151,7 @@ static void cover_unprotect(cover_t* cov)
 static void cover_enable(cover_t* cov, bool collect_comps, bool extra)
 {
 	int kcov_mode = collect_comps ? KCOV_MODE_TRACE_CMP : KCOV_MODE_TRACE_PC;
-#if GOOS_freebsd
+#if GOOS_freebsd || GOOS_cheribsd
 	// FreeBSD uses an int as the third argument.
 	if (ioctl(cov->fd, KIOENABLE, kcov_mode))
 		exitf("cover enable write trace failed, mode=%d", kcov_mode);

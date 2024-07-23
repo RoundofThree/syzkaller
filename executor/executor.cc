@@ -469,7 +469,7 @@ static std::tuple<rpc::ComparisonRaw, bool, bool> convert(const kcov_comparison_
 #include "executor_linux.h"
 #elif GOOS_fuchsia
 #include "executor_fuchsia.h"
-#elif GOOS_freebsd || GOOS_netbsd || GOOS_openbsd
+#elif GOOS_freebsd || GOOS_cheribsd || GOOS_netbsd || GOOS_openbsd
 #include "executor_bsd.h"
 #elif GOOS_darwin
 #include "executor_darwin.h"

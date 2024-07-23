@@ -15,7 +15,7 @@
 #define _GNU_SOURCE
 #endif
 
-#if GOOS_freebsd || GOOS_test && HOSTGOOS_freebsd
+#if GOOS_freebsd || GOOS_cheribsd || GOOS_test && HOSTGOOS_freebsd
 #include <sys/endian.h> // for htobe*.
 #elif GOOS_darwin
 #include <libkern/OSByteOrder.h>
@@ -69,7 +69,7 @@ NORETURN void doexit_thread(int status)
 #if SYZ_EXECUTOR || SYZ_MULTI_PROC || SYZ_REPEAT && SYZ_CGROUPS ||                      \
     SYZ_NET_DEVICES || __NR_syz_mount_image || __NR_syz_read_part_table ||              \
     __NR_syz_usb_connect || __NR_syz_usb_connect_ath9k || __NR_syz_usbip_server_init || \
-    (GOOS_freebsd || GOOS_darwin || GOOS_openbsd || GOOS_netbsd) && SYZ_NET_INJECTION
+    (GOOS_freebsd || GOOS_cheribsd || GOOS_darwin || GOOS_openbsd || GOOS_netbsd) && SYZ_NET_INJECTION
 static unsigned long long procid;
 #endif
 
@@ -111,7 +111,7 @@ static void segv_handler(int sig, siginfo_t* info, void* ctx)
 	const uintptr_t prog_end = 100 << 20;
 	int skip = __atomic_load_n(&skip_segv, __ATOMIC_RELAXED) != 0;
 	int valid = addr < prog_start || addr > prog_end;
-#if GOOS_freebsd || (GOOS_test && HOSTGOOS_freebsd)
+#if GOOS_freebsd || GOOS_cheribsd || (GOOS_test && HOSTGOOS_freebsd)
 	// FreeBSD delivers SIGBUS in response to any fault that isn't a page
 	// fault.  In this case it tries to be helpful and sets si_addr to the
 	// address of the faulting instruction rather than zero as other
@@ -225,7 +225,7 @@ static void use_temporary_dir(void)
 #endif
 #endif
 
-#if GOOS_netbsd || GOOS_freebsd || GOOS_darwin || GOOS_openbsd || GOOS_test
+#if GOOS_netbsd || GOOS_freebsd || GOOS_cheribsd || GOOS_cheribsd || GOOS_darwin || GOOS_openbsd || GOOS_test
 #if SYZ_EXECUTOR || SYZ_REPEAT && SYZ_USE_TMP_DIR && SYZ_EXECUTOR_USES_FORK_SERVER
 #include <dirent.h>
 #include <errno.h>
@@ -234,7 +234,7 @@ static void use_temporary_dir(void)
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#if GOOS_freebsd
+#if GOOS_freebsd || GOOS_cheribsd
 // Unset file flags which might inhibit unlinking.
 static void reset_flags(const char* filename)
 {
@@ -284,7 +284,7 @@ static void __attribute__((noinline)) remove_dir(const char* dir)
 			continue;
 		}
 		if (unlink(filename)) {
-#if GOOS_freebsd
+#if GOOS_freebsd || GOOS_cheribsd
 			if (errno == EPERM) {
 				reset_flags(filename);
 				reset_flags(dir);
@@ -297,7 +297,7 @@ static void __attribute__((noinline)) remove_dir(const char* dir)
 	}
 	closedir(dp);
 	while (rmdir(dir)) {
-#if GOOS_freebsd
+#if GOOS_freebsd || GOOS_cheribsd
 		if (errno == EPERM) {
 			reset_flags(dir);
 			if (rmdir(dir) == 0)
@@ -365,7 +365,7 @@ static void thread_start(void* (*fn)(void*), void* arg)
 #endif
 #endif
 
-#if GOOS_freebsd || GOOS_darwin || GOOS_netbsd || GOOS_openbsd || GOOS_test
+#if GOOS_freebsd || GOOS_cheribsd || GOOS_darwin || GOOS_netbsd || GOOS_openbsd || GOOS_test
 #if SYZ_EXECUTOR || SYZ_THREADED
 
 #include <pthread.h>
@@ -480,7 +480,7 @@ static uint16 csum_inet_digest(struct csum_inet* csum)
 }
 #endif
 
-#if GOOS_freebsd || GOOS_darwin || GOOS_netbsd
+#if GOOS_freebsd || GOOS_cheribsd || GOOS_darwin || GOOS_netbsd
 #include "common_bsd.h"
 #elif GOOS_openbsd
 #include "common_openbsd.h"
@@ -502,7 +502,7 @@ static uint16 csum_inet_digest(struct csum_inet* csum)
 #include "common_ext.h"
 #endif
 
-#if SYZ_EXECUTOR || __NR_syz_execute_func
+#if !GOOS_cheribsd && (SYZ_EXECUTOR || __NR_syz_execute_func)
 // syz_execute_func(text ptr[in, text[taget]])
 static long syz_execute_func(volatile long text)
 {
