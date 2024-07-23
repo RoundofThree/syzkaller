@@ -439,7 +439,14 @@ private:
 		}
 		if (flag_debug) {
 			output_.resize(output_.size() + 1);
-			debug("proc %d: got output: %s\n", id_, output_.data() + debug_output_pos_);
+			// Ensures smaller output from the child, which are most likely hexdumps,
+			// are displayed on the same line
+			if (n < 5) {
+				debug("%s", output_.data() + debug_output_pos_);
+			}
+			else {
+				debug("proc %d: got output: %s\n", id_, output_.data() + debug_output_pos_);
+			}
 			output_.resize(output_.size() - 1);
 			debug_output_pos_ = output_.size();
 		}

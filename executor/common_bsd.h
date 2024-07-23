@@ -190,10 +190,12 @@ static void execute_command(bool panic, const char* format, ...)
 	}
 }
 
+// declaration for initialize_tun
+static int read_tun(char* data, int size);
+
 static void initialize_tun(int tun_id)
 {
 #if SYZ_EXECUTOR
-	return;
 	if (!flag_net_injection)
 		return;
 #endif // SYZ_EXECUTOR
@@ -270,6 +272,17 @@ static void initialize_tun(int tun_id)
 	char remote_ipv6[MAX_REMOTE_IPV6_SIZE];
 	snprintf_check(remote_ipv6, sizeof(remote_ipv6), REMOTE_IPV6, tun_id);
 	execute_command(0, "ndp -s %s%%%s %s", remote_ipv6, tun_iface, remote_mac);
+
+	// From testing on CheriBSD, the interface always sends out an ARP announcement
+	// after coming up, so we need to clear that
+	char data[1000];
+	memset(data, '\0', sizeof(data));
+	int rv = read_tun(&data[0], sizeof(data));
+	if (rv < 0) {
+		fail("tun read after init failed");
+	}
+	debug("Read one frame before run:\n");
+	debug_dump_data(data, (size_t)rv);
 }
 
 #endif // SYZ_EXECUTOR || SYZ_NET_INJECTION
@@ -295,7 +308,7 @@ static long syz_emit_ethernet(volatile long a0, volatile long a1)
 #if !GOOS_darwin && SYZ_EXECUTOR || SYZ_NET_INJECTION && (__NR_syz_extract_tcp_res || SYZ_REPEAT)
 #include <errno.h>
 
-static int read_tun(char* data, int size)
+static int read_tun_internal(char* data, int size)
 {
 	if (tunfd < 0)
 		return -1;
@@ -308,6 +321,26 @@ static int read_tun(char* data, int size)
 	}
 	return rv;
 }
+
+static int read_tun(char* data, int size) {
+	int is_icmp6_mld = 1;
+	int rv;
+	// Similar to the issue outlined above on ARP, the interface always
+	// sends out one or more multicast frames we don't want in the case of TCP
+	unsigned char ipv6_mcast[] = { 0x33, 0x33, 0x00, 0x00, 0x00, 0x16 };
+	do {
+		rv = read_tun_internal(data, size);
+		if (rv < sizeof(ipv6_mcast)) {
+			return rv;
+		}
+		// Ensure we do not get an IPv6 multicast frame
+		if (memcmp(data, &ipv6_mcast, sizeof(ipv6_mcast))) {
+			is_icmp6_mld = 0;
+		}
+	} while (is_icmp6_mld);
+	return rv;
+}
+
 #endif
 
 #if !GOOS_darwin && SYZ_EXECUTOR || __NR_syz_extract_tcp_res && SYZ_NET_INJECTION
