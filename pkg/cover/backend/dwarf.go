@@ -113,7 +113,7 @@ func processModule(params *dwarfParams, module *KernelModule, info *symbolInfo,
 
 	var data []byte
 	var coverPoints [2][]uint64
-	if target.Arch != targets.AMD64 && target.Arch != targets.ARM64 {
+	if target.Arch != targets.AMD64 { // && target.Arch != targets.ARM64 {
 		coverPoints, err = objdump(target, module)
 	} else if module.Name == "" {
 		data, err = params.readTextData(module)
@@ -691,7 +691,7 @@ func archCallInsn(target *targets.Target) ([][]byte, [][]byte) {
 		return [][]byte{[]byte("\tcall ")}, callName
 	case targets.ARM64:
 		// ffff0000080d9cc0:       bl      ffff00000820f478 <__sanitizer_cov_trace_pc>
-		return [][]byte{[]byte("\tbl ")}, [][]byte{
+		return [][]byte{[]byte("\tbl "), []byte("\tbl\t")}, [][]byte{
 			[]byte("<__sanitizer_cov_trace_pc>"),
 			[]byte("<____sanitizer_cov_trace_pc_veneer>"),
 		}
