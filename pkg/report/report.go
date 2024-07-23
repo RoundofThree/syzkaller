@@ -142,6 +142,7 @@ var ctors = map[string]fn{
 	targets.Starnix: ctorFuchsia,
 	targets.GVisor:  ctorGvisor,
 	targets.FreeBSD: ctorFreebsd,
+	targets.CheriBSD: ctorCheribsd,
 	targets.Darwin:  ctorDarwin,
 	targets.NetBSD:  ctorNetbsd,
 	targets.OpenBSD: ctorOpenbsd,
