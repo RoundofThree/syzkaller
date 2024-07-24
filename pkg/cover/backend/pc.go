@@ -18,7 +18,8 @@ func PreviousInstructionPC(target *targets.Target, vm string, pc uint64) uint64 
 	pc -= offset
 	// THUMB instructions are 2 or 4 bytes with low bit set.
 	// ARM instructions are always 4 bytes.
-	if target.Arch == targets.ARM || target.Arch == targets.ARM64 {
+	if target.Arch == targets.ARM || 
+	   target.Arch == targets.MorelloHybrid {
 		return pc & ^uint64(1)
 	}
 	return pc
@@ -44,7 +45,7 @@ func instructionLen(arch string) uint64 {
 		return 5
 	case targets.I386:
 		return 5
-	case targets.ARM64:
+	case targets.ARM64, targets.MorelloHybrid:
 		return 4
 	case targets.ARM:
 		return 3

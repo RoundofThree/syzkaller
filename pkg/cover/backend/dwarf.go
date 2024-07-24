@@ -689,7 +689,7 @@ func archCallInsn(target *targets.Target) ([][]byte, [][]byte) {
 	case targets.I386:
 		// c1000102:       call   c10001f0 <__sanitizer_cov_trace_pc>
 		return [][]byte{[]byte("\tcall ")}, callName
-	case targets.ARM64:
+	case targets.ARM64, targets.MorelloHybrid:
 		// ffff0000080d9cc0:       bl      ffff00000820f478 <__sanitizer_cov_trace_pc>
 		return [][]byte{[]byte("\tbl "), []byte("\tbl\t")}, [][]byte{
 			[]byte("<__sanitizer_cov_trace_pc>"),
