@@ -1,6 +1,8 @@
 # CheriBSD
 
-This page contains instructions to set up syzkaller to run on a CheriBSD host (tested on hybrid) and fuzz a CheriBSD purecap kernel running under bhyve. Most of this document is copied from the guide for [FreeBSD](docs/freebsd/README.md), with a few adjustments for CheriBSD.
+This page contains instructions to set up syzkaller to run on a CheriBSD host and fuzz a CheriBSD purecap kernel running under bhyve. Currently, only hybrid support is implemented, with purecap support in the works.
+
+Most of this document is copied from the guide for [FreeBSD](docs/freebsd/README.md), with a few adjustments for CheriBSD. Many thanks to the original authors of the document.
 
 ## Prerequisites
 
@@ -12,11 +14,11 @@ You will need the following:
 
 The required dependencies can be installed by running:
 ```console
-# pkg install bash gcc git gmake go golangci-lint llvm
+# pkg64 install bash gcc git gmake go golangci-lint llvm
 ```
 When using bhyve as the VM backend, a DHCP server must also be installed:
 ```console
-# pkg install dnsmasq
+# pkg64 install dnsmasq
 ```
 To checkout the syzkaller sources, run:
 ```console
@@ -25,10 +27,11 @@ $ git clone https://github.com/YichenChai/syzkaller
 and the binaries can be built by running:
 ```console
 $ cd syzkaller
-$ gmake
+$ TARGETOS=cheribsd TARGETVMARCH=morello_hybrid TARGETARCH=morello_hybrid gmake clean # Just in case
+$ TARGETOS=cheribsd TARGETVMARCH=morello_hybrid TARGETARCH=morello_hybrid gmake
 ```
 
-Once this completes, a `syz-manager` executable should be available under `bin/`.
+Seeing "freebsd" and "arm64" during the make process is intended, as only syz-executor needs to be our intended architecture. Once this completes, a `syz-manager` executable should be available under `bin/`.
 
 If `gmake` terminates with a Golang backtrace, you may be using a version that has a [known bug](https://github.com/CTSRD-CHERI/cheribsd-ports/issues/9). To remedy this, run the following:
 
@@ -40,38 +43,7 @@ All commands using `sudo` can include `-E` to let `sudo` include this environmen
 
 ## Regenerating constants (Optional)
 
-In the following commands, take note to replace CHERIBSD_SRC with the path to the CheriBSD source code.
-
-The following commands set up source code for constant generation:
-```console
-$ cd $CHERIBSD_SRC # Source directory of CheriBSD source code
-$ mkdir syzkaller-include
-$ mkdir syzkaller-include/machine
-$ cp sys/arm64/include/* syzkaller-include/machine/
-```
-
-Now, to generate the constants, run the following:
-```console
-$ cd syzkaller # Path to syzkaller
-$ cat <<__EOF__ >test.cfg
--target
-aarch64-unknown-freebsd14
--I$CHERIBSD_SRC/syzkaller-include/
--mcpu=rainier
--march=morello
--mabi=aapcs
--Xclang
--morello-vararg=new
-__EOF__
-$ gmake bin/syz-extract
-$ CFLAGS_ARM64='--config ./test.cfg' bin/syz-extract -build -os=freebsd -sourcedir=$CHERIBSD_SRC -arch=arm64
-```
-
-Finally, run the Python script as follows to avoid a [known issue](https://github.com/google/syzkaller/issues/2749#issuecomment-916875126). Instead of regenerating constants for all archs, the script just works around the issue by patching existing constant files to make it appear as if they can be used for all archs.
-
-```console
-$ python fixconst.py
-```
+If any modifications were made to the syscall descriptions, please follow the instructions [here](../../syscall_descriptions.md) to regenerate constants and repeat the previous step.
 
 ## Setting up the CheriBSD VM (Guest)
 
@@ -83,12 +55,12 @@ First, ensure that the bhyve kernel module is loaded:
 To start the guest in bhyve, run the following,
 ```console
 # bhyve \
- -c 1 \                                                                                              
- -m 1g \                                                                                             
- -s 0:0,hostbridge \                                                                                 
- -s 1:0,virtio-blk,$IMAGEFILE \                                                   
- -o bootrom=/usr/local64/share/u-boot/u-boot-bhyve-arm64/u-boot.bin \                                
- -o console=stdio \                                                                                  
+ -c 1 \
+ -m 1g \
+ -s 0:0,hostbridge \
+ -s 1:0,virtio-blk,$IMAGEFILE \
+ -o bootrom=/usr/local64/share/u-boot/u-boot-bhyve-arm64/u-boot.bin \
+ -o console=stdio \
  cheribsd-morello-purecap
 ```
 
@@ -101,6 +73,8 @@ console="comconsole"
 kern.kstack_pages="7"
 __EOF__
 ```
+
+TODO: Insert instructions on not running dhclient on tap devices in guest so they don't interfere with fuzzing
 
 Install an ssh key for the user and verify that you can SSH into the VM from the host.  Note that bhyve requires the use of the root user for the time being. The VM can be shut off once previous steps are completed.
 
@@ -131,31 +105,37 @@ If all of the above worked, the next step will be to set up syzkaller's configur
 
 ```json
 {
-	"name": "cheribsd-test",
-	"target": "freebsd/arm64",
-	"http": ":10000",
-	"workdir": "./workdir",
-	"syzkaller": "<PATH TO SYZKALLER GIT>",
-	"sshkey": "<SSH PRIV>",
-	"sandbox": "none",
-	"procs": 1,
-	"image": "<PATH TO IMAGE FILE ON ZFS>",
-	"type": "bhyve",
-	"kernel_obj": "<KERNEL OBJECTS>",
-	"vm": {
-		"count": 1,
-		"hostip": "169.254.0.1",
-		"dataset": "<ZFS>",
-		"uboot": "/usr/local64/share/u-boot/u-boot-bhyve-arm64/u-boot.bin",
-		"tapdev": "tap0",
-		"mem": "2g",
-		"sshforward": false
-	},
-	"ignores": ["unknown sandbox type"]
+        "name": "cheribsd-test",
+        "target": "cheribsd/morello_hybrid",
+        "http": ":10000",
+        "workdir": "./workdir",
+        "syzkaller": "<PATH TO SYZKALLER GIT>",
+        "sshkey": "<SSH PRIV>",
+        "sandbox": "none",
+        "procs": 1,
+        "image": "<PATH TO IMAGE FILE ON ZFS>",
+        "type": "bhyve",
+        "kernel_obj": "<KERNEL OBJECTS>",
+        "vm": {
+                "count": 1,
+                "cpu": 2,
+                "hostip": "169.254.0.1",
+                "dataset": "<ZFS>",
+                "uboot": "/usr/local64/share/u-boot/u-boot-bhyve-arm64/u-boot.bin",
+                "tapdev": "tap0",
+                "mem": "2g",
+                "sshforward": false
+        },
+        "ignores": ["unknown sandbox type"],
+        "experimental": {
+                "reset_acc_state": true
+        }
 }
 ```
 
 The line for `"kernel_obj"` can be removed for the time being as coverage support is still being tested. It is crucial to keep the last line (i.e. `"ignores"`) to avoid a bug.
+
+TODO: instructions on setting up coverage
 
 Then, start `syz-manager` with:
 ```console
@@ -168,7 +148,7 @@ serving rpc on tcp://32720
 booting test machines...
 wait for the connection from test machine...
 bhyve args: [-c 1 -m 2g -s 0:0,hostbridge -s 2:0,virtio-net,tap0 -s 1:0,virtio-blk,/zroot2/syzkaller/bhyve-syzkaller-cheribsd-test-0/mybuild.img -o bootrom=/usr/local64/share/u-boot/u-boot-bhyve-arm64/u-boot.bin -o console=stdio syzkaller-cheribsd-test-0]
-2024/07/16 11:20:05 machine check:
+machine check:
 BinFmtMisc              : enabled
 Comparisons             : enabled
 Coverage                : enabled
