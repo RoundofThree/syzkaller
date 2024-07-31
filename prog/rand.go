@@ -77,7 +77,7 @@ var (
 		(1 << 64) - 1,
 	}
 	// The indexes (exclusive) for the maximum specialInts values that fit in 1, 2, ... 8 bytes.
-	specialIntIndex [9]int
+	specialIntIndex [17]int
 )
 
 func init() {
@@ -85,6 +85,7 @@ func init() {
 		return specialInts[i] < specialInts[j]
 	})
 	for i := range specialIntIndex {
+		if (i > 8) { i = 8 }
 		bitSize := uint64(8 * i)
 		specialIntIndex[i] = sort.Search(len(specialInts), func(i int) bool {
 			return specialInts[i]>>bitSize != 0
