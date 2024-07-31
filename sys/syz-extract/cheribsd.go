@@ -45,7 +45,6 @@ func (*cheribsd) processFile(arch *Arch, info *compiler.ConstInfo) (map[string]u
 		"-fmessage-length=0",
 		"-nostdinc",
 		"-DGENOFFSET",
-		"-D_KERNEL",
 		"-D__BSD_VISIBLE=1",
 		"-DCOMPAT_FREEBSD13",
 		"-DCOMPAT_FREEBSD14",
@@ -71,5 +70,28 @@ func (*cheribsd) processFile(arch *Arch, info *compiler.ConstInfo) (map[string]u
 		TargetEndian:   arch.target.HostEndian,
 	}
 	cc := arch.target.CCompiler
-	return extract(info, cc, args, params)
+	res, undef, err := extract(info, cc, args, params)
+	args = append(args, "-D_KERNEL")
+	res2, undef2, err2 := extract(info, cc, args, params)
+	if err != nil {
+		return res2, undef2, err2
+	} else {
+		undef_cnt := 0
+		undef2_cnt := 0
+		for _, v := range undef {
+			if v {
+				undef_cnt += 1
+			}
+		}
+		for _, v := range undef2 {
+			if v {
+				undef2_cnt += 1
+			}
+		}
+		if undef2_cnt < undef_cnt {
+			return res2, undef2, err2
+		} else {
+			return res, undef, err
+		}
+	}
 }

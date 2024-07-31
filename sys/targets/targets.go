@@ -501,7 +501,7 @@ var List = map[string]map[string]*Target{
 			},
 		},
 		MorelloPurecap: {
-			PtrSize:   8, // Temporary
+			PtrSize:   16,
 			PageSize:  4 << 10,
 			CCompiler: "clang",
 			CFlags:    append(append(cheriArgs, "-mabi=purecap"), GetCFlags(MorelloPurecap)...),
