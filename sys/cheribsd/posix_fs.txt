@@ -45,8 +45,8 @@ fstatat(fd fd, path ptr[in, filename], statbuf ptr[out, stat], flag flags[fstata
 freebsd11_fstatat(fd fd, path ptr[in, filename], statbuf ptr[out, freebsd11_stat], flag flags[fstatat_flags])
 freebsd11_getfsstat(buf ptr[out, freebsd11_statfs], size len[buf], mode flags[getfsstat_flags])
 getfsstat(buf ptr[out, statfs], size len[buf], mode flags[getfsstat_flags])
-posix_fallocate(fd fd, offset fileoff, len intptr)
-posix_fadvise(fd fd, offset fileoff, len intptr, advice flags[fadvise_advice])
+posix_fallocate(fd fd, offset fileoff, len int64)
+posix_fadvise(fd fd, offset fileoff, len int64, advice flags[fadvise_advice])
 pathconf(file ptr[in, filename], name flags[conf_value])
 lpathconf(file ptr[in, filename], name flags[conf_value])
 fpathconf(fd fd, name flags[conf_value])
@@ -62,12 +62,12 @@ pipefd {
 
 iovec_in {
 	addr	buffer[in]
-	len	len[addr, intptr]
+	len	len[addr, int64]
 }
 
 iovec_out {
 	addr	buffer[out]
-	len	len[addr, intptr]
+	len	len[addr, int64]
 }
 
 freebsd11_stat {

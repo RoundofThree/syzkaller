@@ -54,9 +54,9 @@ msghdr_un {
 	addr	ptr[in, sockaddr_un]
 	addrlen	len[addr, int32]
 	vec	ptr[in, array[iovec_in]]
-	vlen	len[vec, intptr]
+	vlen	len[vec, int64]
 	ctrl	ptr[in, array[cmsghdr_un], opt]
-	ctrllen	bytesize[ctrl, intptr]
+	ctrllen	bytesize[ctrl, int64]
 	f	flags[send_flags, int32]
 }
 
@@ -66,14 +66,14 @@ cmsghdr_un [
 ] [varlen]
 
 cmsghdr_un_rights {
-	len	len[parent, intptr]
+	len	len[parent, int64]
 	level	const[SOL_SOCKET, int32]
 	type	const[SCM_RIGHTS, int32]
 	fds	array[fd]
 } [align[PTR_SIZE]]
 
 cmsghdr_un_cred {
-	len	len[parent, intptr]
+	len	len[parent, int64]
 	level	const[SOL_SOCKET, int32]
 	type	const[SCM_CREDS, int32]
 	pid	pid

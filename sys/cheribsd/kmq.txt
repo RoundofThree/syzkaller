@@ -16,9 +16,9 @@ kmq_unlink(file ptr[in, filename])
 oflags = O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_EXCL, O_NONBLOCK
 
 mq_attr {
-	mq_flags	intptr
-	mq_maxmsg	intptr
-	mq_msgsize	intptr
-	mq_curmsgs	intptr
-	__reserved	array[const[0, intptr], 4]
+	mq_flags	int64
+	mq_maxmsg	int64
+	mq_msgsize	int64
+	mq_curmsgs	int64
+	__reserved	array[const[0, int64], 4]
 }

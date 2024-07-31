@@ -102,35 +102,32 @@ ipc_perm {
 	mode	flags[open_mode, int16]
 	seq	int16
 	pad0	const[0, int32]
-	key	intptr
+	key	int64
 }
 
 msqid_ds {
 	perm	ipc_perm
-	stime	intptr
-	rtime	intptr
-	ctime	intptr
-	cbytes	intptr
-	qnum	intptr
-	qbytes	intptr
+	msg_first intptr
+	msg_last intptr
+	cbytes	int64
+	qnum	int64
+	qbytes	int64
 	lspid	pid
 	lrpid	pid
-	pad0	const[0, intptr]
-	pad1	const[0, intptr]
+	stime	int64
+	rtime	int64
+	ctime	int64
 }
 
 shmid_ds {
 	perm	ipc_perm
-	segsz	int32
-	atime	intptr
-	dtime	intptr
-	ctime	intptr
-	cpid	pid
+	segsz	int64
 	lpid	pid
+	cpid	pid
 	nattch	int16
-	unused0	const[0, int16]
-	unused1	const[0, intptr]
-	unused2	const[0, intptr]
+	atime	int64
+	dtime	int64
+	ctime	int64
 }
 
 semid_ds {
@@ -150,6 +147,6 @@ sembuf {
 }
 
 msgbuf {
-	typ	flags[msgbuf_type, intptr]
+	typ	flags[msgbuf_type, int64]
 	data	array[int8]
 } [packed]

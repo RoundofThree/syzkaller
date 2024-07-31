@@ -71,7 +71,7 @@ lchflags(file ptr[in, filename], flags flags[chflags_flags])
 faccessat(dirfd fd_dir, pathname ptr[in, filename], mode flags[access_mode], flags flags[faccessat_flags])
 access(pathname ptr[in, filename], mode flags[access_mode])
 eaccess(pathname ptr[in, filename], mode flags[access_mode])
-profil(samples buffer[inout], size len[samples], offt intptr, scale int32)
+profil(samples buffer[inout], size len[samples], offt int64, scale int32)
 utimes(filename ptr[in, filename], times ptr[in, itimerval])
 futimesat(dir fd_dir, pathname ptr[in, filename], times ptr[in, itimerval])
 utimensat(dir fd_dir, pathname ptr[in, filename], times ptr[in, itimerval], flags flags[utimensat_flags])
@@ -122,8 +122,8 @@ renameat(oldfd fd_dir, old ptr[in, filename], newfd fd_dir, new ptr[in, filename
 mkdir(path ptr[in, filename], mode flags[open_mode])
 mkdirat(fd fd_dir, path ptr[in, filename], mode flags[open_mode])
 rmdir(path ptr[in, filename])
-truncate(file ptr[in, filename], len intptr)
-ftruncate(fd fd, len intptr)
+truncate(file ptr[in, filename], len int64)
+ftruncate(fd fd, len int64)
 flock(fd fd, op flags[flock_op])
 fsync(fd fd)
 fdatasync(fd fd)
@@ -161,11 +161,11 @@ sigtimedwait(set ptr[in, sigset], info ptr[out, siginfo, opt], timeout ptr[in, t
 sigwaitinfo(set ptr[in, sigset], info ptr[out, siginfo, opt])
 sigwait(set ptr[in, sigset], sig intptr)
 sigqueue(pid pid, signo signo, value sigval)
-sigaltstack(ss vma, oss ptr[out, intptr, opt])
+sigaltstack(ss vma, oss ptr[out, int64, opt])
 nanosleep(req ptr[in, timespec], rem ptr[out, timespec, opt])
 getitimer(which flags[getitimer_which], cur ptr[out, itimerval])
 setitimer(which flags[getitimer_which], new ptr[in, itimerval], old ptr[out, itimerval, opt])
-exit(code intptr)
+exit(code int32)
 wait4(pid pid, status ptr[out, int32, opt], options flags[wait_options], ru ptr[out, rusage, opt])
 fork() pid
 vfork() pid
@@ -231,22 +231,22 @@ mesgq_r {
 }
 
 poll_r {
-	band	intptr
+	band	int64
 }
 
 spare_r {
-	spare1	intptr
+	spare1	int64
 	spare2	array[int32, 7]
 }
 
 timespec {
-	sec	intptr
-	nsec	intptr
+	sec	int64
+	nsec	int64
 }
 
 timeval {
-	sec	intptr
-	usec	intptr
+	sec	int64
+	usec	int64
 }
 
 itimerval {
@@ -269,25 +269,25 @@ fd_set {
 rusage {
 	utime	timeval
 	stime	timeval
-	maxrss	intptr
-	ixrss	intptr
-	idrss	intptr
-	isrss	intptr
-	minflt	intptr
-	majflt	intptr
-	nswap	intptr
-	inblock	intptr
-	oublock	intptr
-	msgsnd	intptr
-	msgrcv	intptr
-	signals	intptr
-	nvcsw	intptr
-	nivcsw	intptr
+	maxrss	int64
+	ixrss	int64
+	idrss	int64
+	isrss	int64
+	minflt	int64
+	majflt	int64
+	nswap	int64
+	inblock	int64
+	oublock	int64
+	msgsnd	int64
+	msgrcv	int64
+	signals	int64
+	nvcsw	int64
+	nivcsw	int64
 }
 
 rlimit {
-	soft	intptr
-	hard	intptr
+	soft	int64
+	hard	int64
 }
 
 rtprio {
@@ -299,14 +299,14 @@ thr_param {
 	start_func	ptr[in, text[target]]
 	arg		intptr
 	stack_base	ptr64[in, array[int8]]
-	stack_size	bytesize[stack_base, intptr]
+	stack_size	bytesize[stack_base, int64]
 	tls_base	ptr64[in, array[int8]]
-	tls_size	bytesize[tls_base, intptr]
-	child_tid	ptr[out, intptr]
+	tls_size	bytesize[tls_base, int64]
+	child_tid	ptr[out, int64]
 	parent_tid	ptr[out, thr_param_tid]
 	flags		flags[thr_flags, int32]
 	rtp		ptr[in, rtprio]
-	spare		array[intptr, 3]
+	spare		array[int64, 3]
 }
 
 thr_param_tid {
@@ -315,11 +315,12 @@ thr_param_tid {
 }
 
 flock {
+	start	int64
+	len	int64
+	pid pid
 	type	flags[flock_type, int16]
 	whence	flags[seek_whence, int16]
-	start	intptr
-	len	intptr
-	pid	pid
+	sysid int32
 }
 
 linger {
