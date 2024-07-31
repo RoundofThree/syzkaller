@@ -102,7 +102,7 @@ static NORETURN void doexit_thread(int status);
 static PRINTF(1, 2) void debug(const char* msg, ...);
 void debug_dump_data(const char* data, int length);
 
-#if 0
+#if 1
 #define debug_verbose(...) debug(__VA_ARGS__)
 #else
 #define debug_verbose(...) (void)0
@@ -126,6 +126,10 @@ const int kMaxOutput = kMaxOutputComparisons;
 const int kInitialOutput = 14 << 20;
 const int kMaxOutput = kInitialOutput;
 #endif
+
+extern void *syz_data_ptr;
+
+#define SYZ_DATA_PTR syz_data_ptr
 
 // For use with flatrpc bit flags.
 template <typename T>
@@ -303,6 +307,7 @@ const uint64 arg_addr64 = 2;
 const uint64 arg_result = 3;
 const uint64 arg_data = 4;
 const uint64 arg_csum = 5;
+const uint64 arg_addr128 = 6;
 
 const uint64 binary_format_native = 0;
 const uint64 binary_format_bigendian = 1;
@@ -443,7 +448,7 @@ struct feature_t {
 	const char* (*setup)();
 };
 
-static thread_t* schedule_call(int call_index, int call_num, uint64 copyout_index, uint64 num_args, uint64* args, uint8* pos, call_props_t call_props);
+static thread_t* schedule_call(int call_index, int call_num, uint64 copyout_index, uint64 num_args, intptr_t* args, uint8* pos, call_props_t call_props);
 static void handle_completion(thread_t* th);
 static void copyout_call_results(thread_t* th);
 static void write_call_output(thread_t* th, bool finished);
@@ -453,7 +458,7 @@ static void thread_create(thread_t* th, int id, bool need_coverage);
 static void thread_mmap_cover(thread_t* th);
 static void* worker_thread(void* arg);
 static uint64 read_input(uint8** input_posp, bool peek = false);
-static uint64 read_arg(uint8** input_posp);
+static intptr_t read_arg(uint8** input_posp);
 static uint64 read_const_arg(uint8** input_posp, uint64* size_p, uint64* bf, uint64* bf_off_p, uint64* bf_len_p);
 static uint64 read_result(uint8** input_posp);
 static uint64 swap(uint64 v, uint64 size, uint64 bf);
@@ -650,7 +655,7 @@ static void mmap_output(uint32 size)
 			// surrounded by unmapped pages.
 			// The address chosen must also work on 32-bit kernels with 1GB user address space.
 			const uint64 kOutputBase = 0x1b2bc20000ull;
-			mmap_at = (uint32*)(kOutputBase + (1 << 20) * (getpid() % 128));
+			mmap_at = (uint32*)((char*)kOutputBase + (1 << 20) * (getpid() % 128));
 		}
 	} else {
 		// We are expanding the mmapped region. Adjust the parameters to avoid mmapping already
@@ -658,11 +663,19 @@ static void mmap_output(uint32 size)
 		// There exists a mremap call that could have helped, but it's purely Linux-specific.
 		mmap_at = (uint32*)((char*)(output_data) + output_size);
 	}
+#if GOARCH_morello_purecap
+	mmap_at = (uint32*)((char*)0ull + (uint64)mmap_at);
+	void* result = mmap(mmap_at, size,
+			    PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, kOutFd, 0);
+#else
 	void* result = mmap(mmap_at, size - output_size,
 			    PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, kOutFd, output_size);
+#endif
 	if (result == MAP_FAILED || (mmap_at && result != mmap_at))
 		failmsg("mmap of output file failed", "want %p, got %p", mmap_at, result);
+#if !GOARCH_morello_purecap
 	if (output_data == NULL)
+#endif
 		output_data = static_cast<OutputData*>(result);
 	output_size = size;
 }
@@ -760,6 +773,7 @@ bool cover_collection_required()
 
 void reply_execute(uint32 status)
 {
+	debug("completed with status %d", status);
 	if (write(kOutPipeFd, &status, sizeof(status)) != sizeof(status))
 		fail("control pipe write failed");
 }
@@ -813,7 +827,7 @@ void execute_one()
 		if (call_num == instr_eof)
 			break;
 		if (call_num == instr_copyin) {
-			char* addr = (char*)(read_input(&input_pos) + SYZ_DATA_OFFSET);
+			char* addr = (char*)SYZ_DATA_PTR + read_input(&input_pos);
 			uint64 typ = read_input(&input_pos);
 			switch (typ) {
 			case arg_const: {
@@ -823,12 +837,18 @@ void execute_one()
 				break;
 			}
 			case arg_addr32:
-			case arg_addr64: {
-				uint64 val = read_input(&input_pos) + SYZ_DATA_OFFSET;
-				if (typ == arg_addr32)
-					NONFAILING(*(uint32*)addr = val);
-				else
-					NONFAILING(*(uint64*)addr = val);
+			case arg_addr64:
+			case arg_addr128: {
+				void *val = (char*)SYZ_DATA_PTR + read_input(&input_pos);
+				size_t len = 0;
+				if (typ == arg_addr32) { len = 4; }
+				else if (typ == arg_addr64) { len = 8; }
+				else if (typ == arg_addr128) { len = 16; }
+				// if (typ == arg_addr32)
+				// 	NONFAILING(*(uint32*)addr = (uint32)val);
+				// else
+				// 	NONFAILING(*(uint64*)addr = (uint64)val);
+				NONFAILING(memcpy(addr, &val, len));
 				break;
 			}
 			case arg_result: {
@@ -868,10 +888,9 @@ void execute_one()
 						uint64 chunk_size = read_input(&input_pos);
 						switch (chunk_kind) {
 						case arg_csum_chunk_data:
-							chunk_value += SYZ_DATA_OFFSET;
 							debug_verbose("#%lld: data chunk, addr: %llx, size: %llu\n",
 								      chunk, chunk_value, chunk_size);
-							NONFAILING(csum_inet_update(&csum, (const uint8*)chunk_value, chunk_size));
+							NONFAILING(csum_inet_update(&csum, (const uint8*)SYZ_DATA_PTR + chunk_value, chunk_size));
 							break;
 						case arg_csum_chunk_const:
 							if (chunk_size != 2 && chunk_size != 4 && chunk_size != 8)
@@ -924,7 +943,7 @@ void execute_one()
 		uint64 num_args = read_input(&input_pos);
 		if (num_args > kMaxArgs)
 			failmsg("command has bad number of arguments", "args=%llu", num_args);
-		uint64 args[kMaxArgs] = {};
+		intptr_t args[kMaxArgs] = {};
 		for (uint64 i = 0; i < num_args; i++)
 			args[i] = read_arg(&input_pos);
 		for (uint64 i = num_args; i < kMaxArgs; i++)
@@ -1007,7 +1026,7 @@ void execute_one()
 	}
 }
 
-thread_t* schedule_call(int call_index, int call_num, uint64 copyout_index, uint64 num_args, uint64* args, uint8* pos, call_props_t call_props)
+thread_t* schedule_call(int call_index, int call_num, uint64 copyout_index, uint64 num_args, intptr_t* args, uint8* pos, call_props_t call_props)
 {
 	// Find a spare thread to execute the call.
 	int i = 0;
@@ -1186,7 +1205,7 @@ void copyout_call_results(thread_t* th)
 			uint64 index = read_input(&th->copyout_pos);
 			if (index >= kMaxCommands)
 				failmsg("result overflows kMaxCommands", "index=%lld", index);
-			char* addr = (char*)(read_input(&th->copyout_pos) + SYZ_DATA_OFFSET);
+			char* addr = (char*)SYZ_DATA_PTR + read_input(&th->copyout_pos);
 			uint64 size = read_input(&th->copyout_pos);
 			uint64 val = 0;
 			if (copyout(addr, size, &val)) {
@@ -1246,8 +1265,8 @@ void write_output(int index, cover_t* cov, rpc::CallFlag flags, uint32 error, bo
 	call.offset = off;
 	output_data->consumed.store(output_builder->GetSize(), std::memory_order_release);
 	output_data->completed.store(slot + 1, std::memory_order_release);
-	debug_verbose("out #%u: index=%u errno=%d flags=0x%x total_size=%u\n",
-		      slot + 1, index, error, static_cast<unsigned>(flags), call.data_size - start_size);
+	debug_verbose("out #%u: index=%u errno=%d flags=0x%x\n",
+		      slot + 1, index, error, static_cast<unsigned>(flags));
 }
 
 void write_call_output(thread_t* th, bool finished)
@@ -1501,7 +1520,7 @@ bool copyout(char* addr, uint64 size, uint64* res)
 	    });
 }
 
-uint64 read_arg(uint8** input_posp)
+intptr_t read_arg(uint8** input_posp)
 {
 	uint64 typ = read_input(input_posp);
 	switch (typ) {
@@ -1515,8 +1534,14 @@ uint64 read_arg(uint8** input_posp)
 		return swap(val, size, bf);
 	}
 	case arg_addr32:
-	case arg_addr64: {
-		return read_input(input_posp) + SYZ_DATA_OFFSET;
+	case arg_addr64:
+	case arg_addr128: {
+#if !GOARCH_morello_purecap
+		if (typ == arg_addr128)
+			failmsg("arch does not support 128-bit address")
+#endif
+		debug("received addr arg %llx\n", *(unsigned long long*)((char*)&SYZ_DATA_PTR + 8));
+		return (intptr_t)((char*)SYZ_DATA_PTR + read_input(input_posp));
 	}
 	case arg_result: {
 		uint64 meta = read_input(input_posp);

@@ -15,6 +15,8 @@
 #include <sys/sysctl.h>
 #endif
 
+void *syz_data_ptr = NULL;
+
 static void os_init(int argc, char** argv, void* data, size_t data_size)
 {
 #if GOOS_openbsd
@@ -34,8 +36,9 @@ static void os_init(int argc, char** argv, void* data, size_t data_size)
 #endif
 
 	void* got = mmap(data, data_size, prot, flags, -1, 0);
-	if (data != got)
+	if ((unsigned long long)data != (unsigned long long)got)
 		failmsg("mmap of data segment failed", "want %p, got %p", data, got);
+	syz_data_ptr = (uint8_t *)got;
 
 	// Makes sure the file descriptor limit is sufficient to map control pipes.
 	struct rlimit rlim;
