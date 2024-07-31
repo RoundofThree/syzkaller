@@ -32,7 +32,7 @@ type Config struct {
 	Mem     string `json:"mem"`     // amount of VM memory
 	Dataset string `json:"dataset"` // ZFS dataset containing VM image
 	UBoot   string `json:"uboot"`   // location of u-boot binary
-	Tapdev  string `json:"tapdev"`  // tap interface, optional
+	Tapdev  []string `json:"tapdev"`  // tap interface(s), optional
 	Forward bool   `json:"sshforward"`
 }
 
@@ -152,8 +152,13 @@ func (pool *Pool) Create(workdir string, index int) (vmimpl.Instance, error) {
 	// 	}
 	// }
 
-	if inst.cfg.Tapdev != "" {
-		inst.tapdev = inst.cfg.Tapdev
+	if inst.cfg.Tapdev != nil {
+		if (index < len(inst.cfg.Tapdev)) {
+			inst.tapdev = inst.cfg.Tapdev[index]
+		} else {
+			return nil, fmt.Errorf("%v tap devices, but trying to start VM #%v",
+									len(inst.cfg.Tapdev), index)
+		}
 	}
 
 	if err := inst.Boot(); err != nil {
