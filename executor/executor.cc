@@ -1538,7 +1538,7 @@ intptr_t read_arg(uint8** input_posp)
 	case arg_addr128: {
 #if !GOARCH_morello_purecap
 		if (typ == arg_addr128)
-			failmsg("arch does not support 128-bit address")
+			fail("arch does not support 128-bit address");
 #endif
 		debug("received addr arg %llx\n", *(unsigned long long*)((char*)&SYZ_DATA_PTR + 8));
 		return (intptr_t)((char*)SYZ_DATA_PTR + read_input(input_posp));
