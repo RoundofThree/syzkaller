@@ -342,7 +342,7 @@ var typeArray = &typeDesc{
 			// Special case: const string takes less space in C programs.
 			base.TypeSize = begin * ct.Size()
 			base.TypeAlign = ct.TypeAlign
-			val := make([]byte, 8)
+			val := make([]byte, 16) // 16 for purecap
 			if ct.ArgFormat == prog.FormatBigEndian {
 				binary.BigEndian.PutUint64(val, ct.Val)
 				val = val[8-ct.Size():]
@@ -474,6 +474,9 @@ var typeFlags = &typeDesc{
 		}
 	},
 	Gen: func(comp *compiler, t *ast.Type, args []*ast.Type, base prog.IntTypeCommon) prog.Type {
+		if base.TypeSize > 8 {
+			base.TypeSize = 4
+		}
 		base.TypeAlign = getIntAlignment(comp, base)
 		return generateFlagsType(comp, base, args[0].Ident)
 	},
@@ -600,6 +603,11 @@ var typeProc = &typeDesc{
 			return
 		}
 		size := base.TypeSize * 8
+		// Hack for 128-bit pointers
+		if (size > 64) {
+			start >>= (size - 64)
+			size = 64
+		}
 		max := uint64(1) << size
 		if size == 64 {
 			max = ^uint64(0)

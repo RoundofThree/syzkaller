@@ -188,9 +188,13 @@ func (dec *execDecoder) readArg() ExecArg {
 	case execArgAddr32:
 		fallthrough
 	case execArgAddr64:
+		fallthrough
+	case execArgAddr128:
 		size := 4
 		if typ == execArgAddr64 {
 			size = 8
+		} else if typ == execArgAddr128 {
+			size = 16
 		}
 		return ExecArgConst{
 			Value: dec.read("arg/addr") + dec.target.DataOffset,

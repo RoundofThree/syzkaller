@@ -42,6 +42,7 @@ const (
 	execArgResult
 	execArgData
 	execArgCsum
+	execArgAddr128
 
 	execArgDataReadable = uint64(1 << 63)
 )
@@ -282,6 +283,8 @@ func (w *execContext) writeArg(arg Arg) {
 			w.write(execArgAddr32)
 		case 8:
 			w.write(execArgAddr64)
+		case 16:
+			w.write(execArgAddr128)
 		default:
 			panic(fmt.Sprintf("bad pointer address size %v", a.Size()))
 		}

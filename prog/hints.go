@@ -252,6 +252,7 @@ func checkCompressedArg(arg *DataArg, compMap CompMap, exec func() bool) {
 // As with shrink we ignore cases when the other operand is wider.
 // Note that executor sign extends all the comparison operands to int64.
 func shrinkExpand(v uint64, compMap CompMap, bitsize uint64, image bool) []uint64 {
+	if bitsize > 64 { bitsize = 64 }
 	v = truncateToBitSize(v, bitsize)
 	limit := uint64(1<<bitsize - 1)
 	var replacers map[uint64]bool
