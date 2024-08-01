@@ -124,6 +124,7 @@ func (r *randGen) randInt(bits uint64) uint64 {
 }
 
 func truncateToBitSize(v, bitSize uint64) uint64 {
+	if bitSize == 128 { bitSize = 64 }
 	if bitSize == 0 || bitSize > 64 {
 		panic(fmt.Sprintf("invalid bitSize value: %d", bitSize))
 	}
