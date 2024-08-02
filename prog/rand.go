@@ -77,7 +77,7 @@ var (
 		(1 << 64) - 1,
 	}
 	// The indexes (exclusive) for the maximum specialInts values that fit in 1, 2, ... 8 bytes.
-	specialIntIndex [17]int
+	specialIntIndex [9]int
 )
 
 func init() {
@@ -85,7 +85,6 @@ func init() {
 		return specialInts[i] < specialInts[j]
 	})
 	for i := range specialIntIndex {
-		if (i > 8) { i = 8 }
 		bitSize := uint64(8 * i)
 		specialIntIndex[i] = sort.Search(len(specialInts), func(i int) bool {
 			return specialInts[i]>>bitSize != 0
@@ -98,6 +97,7 @@ func (r *randGen) randInt64() uint64 {
 }
 
 func (r *randGen) randInt(bits uint64) uint64 {
+	if bits > 64 { bits = 64 }
 	v := r.rand64()
 	switch {
 	case r.nOutOf(100, 182):
