@@ -1,13 +1,13 @@
 # CheriBSD
 
-This page contains instructions to set up syzkaller to run on a CheriBSD host and fuzz a CheriBSD purecap kernel running under bhyve. Currently, only hybrid support is implemented, with purecap support in the works.
+This page contains instructions to set up syzkaller to run on a CheriBSD host and fuzz a CheriBSD purecap kernel running under bhyve. `syz-executor`, the program running the actual syscalls, can be either Morello purecap or hybrid.
 
-Most of this document is copied from the guide for [FreeBSD](docs/freebsd/README.md), with a few adjustments for CheriBSD. Many thanks to the original authors of the document.
+This document is adapted from the guide for [FreeBSD](docs/freebsd/README.md), many thanks to the original authors of the document.
 
 ## Prerequisites
 
 You will need the following:
-- An image file of CheriBSD, which can be built using [cheribuild](https://github.com/CTSRD-CHERI/cheribuild/). The kernel will need to built with the options KCOV and COVERAGE enabled. Additionally, refer to the follow [commit](https://github.com/RoundofThree/cheribsd/commit/fc6fe94493979d07ece2d042ab8e100308abef8d) on raising the kernel stack limit at compile time. This adjustment is required so that coverage instrumentation code does not result in a kernel stack overflow in early stages of the kernel's initialisation.
+- An image file of CheriBSD, which can be built using [cheribuild](https://github.com/CTSRD-CHERI/cheribuild/). The kernel will need to built with the options KCOV and COVERAGE enabled. Additionally, refer to the following [commit](https://github.com/RoundofThree/cheribsd/commit/fc6fe94493979d07ece2d042ab8e100308abef8d) on raising the kernel stack limit at compile time. This adjustment is required so that coverage instrumentation code does not result in a kernel stack overflow in early stages of the kernel's initialisation.
 - A local copy of the CheriBSD kernel source code used to build the image.
 
 ### Setting up a FreeBSD host
@@ -31,6 +31,8 @@ $ TARGETOS=cheribsd TARGETVMARCH=morello_hybrid TARGETARCH=morello_hybrid gmake 
 $ TARGETOS=cheribsd TARGETVMARCH=morello_hybrid TARGETARCH=morello_hybrid gmake
 ```
 
+Replace the two environment variables of `morello_hybrid` above with `morello_purecap` to build purecap instead.
+
 Seeing "freebsd" and "arm64" during the make process is intended, as only syz-executor needs to be our intended architecture. Once this completes, a `syz-manager` executable should be available under `bin/`.
 
 If `gmake` terminates with a Golang backtrace, you may be using a version that has a [known bug](https://github.com/CTSRD-CHERI/cheribsd-ports/issues/9). To remedy this, run the following:
@@ -39,7 +41,7 @@ If `gmake` terminates with a Golang backtrace, you may be using a version that h
 export GODEBUG=asyncpreemptoff=1
 ```
 
-All commands using `sudo` can include `-E` to let `sudo` include this environment variable.
+All commands using `sudo` can include `-E` to allow `sudo` to include this environment variable.
 
 ## Regenerating constants (Optional)
 
@@ -70,11 +72,36 @@ On the login screen, login with root and the empty password and run the followin
 # cat <<__EOF__ >>/boot/loader.conf
 autoboot_delay="-1"
 console="comconsole"
-kern.kstack_pages="7"
+kern.kstack_pages="10"
 __EOF__
 ```
 
-TODO: Insert instructions on not running dhclient on tap devices in guest so they don't interfere with fuzzing
+`kstack_pages` is raised to the high number of 10 as the number of stack frames caused by instrumentation may result in a stack overflow.
+
+To ensure dhclient does not interfere with network injection, replace the content in `/etc/devd/dhclient.conf` with,
+
+```
+#
+# Try to start dhclient on Ethernet-like interfaces when the link comes
+# up.  Only devices that are configured to support DHCP will actually
+# run it.  No link down rule exists because dhclient automatically exits
+# when the link goes down.
+#
+notify 0 {
+    match "system"        "IFNET";
+    match "subsystem"    "!tap[0-9]+";
+    match "type"        "LINK_UP";
+    media-type        "ethernet";
+    action "service dhclient quietstart $subsystem";
+};
+
+notify 0 {
+    match "system"        "IFNET";
+    match "type"        "LINK_UP";
+    media-type        "802.11";
+    action "service dhclient quietstart $subsystem";
+};
+```
 
 Install an ssh key for the user and verify that you can SSH into the VM from the host.  Note that bhyve requires the use of the root user for the time being. The VM can be shut off once previous steps are completed.
 
@@ -99,6 +126,15 @@ bridge0
 # sysctl net.link.tap.up_on_open=1
 ```
 
+This setup is designed to be used on a Morello box with only SSH access and as such I decided not to let syzkaller manage the tap devices. To create a tap device, run the following,
+
+```console
+# ifconfig tap0 create
+# ifconfig bridge0 addm tap0
+```
+
+The commands above can be repeated to create more tap devices. They can then be added to the array belong in the json config under `tapdev`.
+
 ### Putting It All Together
 
 If all of the above worked, the next step will be to set up syzkaller's configuration. A sample configuration file is provided in `morello-bhyve.cfg.sample`:
@@ -122,7 +158,7 @@ If all of the above worked, the next step will be to set up syzkaller's configur
                 "hostip": "169.254.0.1",
                 "dataset": "<ZFS>",
                 "uboot": "/usr/local64/share/u-boot/u-boot-bhyve-arm64/u-boot.bin",
-                "tapdev": "tap0",
+                "tapdev": ["tap0"],
                 "mem": "2g",
                 "sshforward": false
         },
@@ -133,13 +169,17 @@ If all of the above worked, the next step will be to set up syzkaller's configur
 }
 ```
 
-The line for `"kernel_obj"` can be removed for the time being as coverage support is still being tested. It is crucial to keep the last line (i.e. `"ignores"`) to avoid a bug.
+It is crucial to keep the last line (i.e. `"ignores"`) to avoid a bug.
 
-TODO: instructions on setting up coverage
+The kernel object directory needs to contain two items:
+1. CheriBSD source code
+2. `kernel.full`, the kernel image with debug symbols
+
+`kernel.full` should be in the root of the directory, whereas CheriBSD's source code should be under its build path. For example, if the kernel object directory is `/home/user/syzkaller/obj` and the kernel was built with source code held in `/home/user/cheri/cheribsd`, then the source code should be copied/symlinked to `/home/user/syzkaller/obj/home/user/cheri/cheribsd`.
 
 Then, start `syz-manager` with:
 ```console
-$ bin/syz-manager -config morello-bhyve.cfg
+# bin/syz-manager -config morello-bhyve.cfg
 ```
 It should start printing output along the lines of:
 ```

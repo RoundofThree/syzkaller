@@ -16,7 +16,7 @@
                 "hostip": "169.254.0.1",
                 "dataset": "<ZFS>",
                 "uboot": "/usr/local64/share/u-boot/u-boot-bhyve-arm64/u-boot.bin",
-                "tapdev": "tap0",
+                "tapdev": ["tap0"],
                 "mem": "2g",
                 "sshforward": false
         },
