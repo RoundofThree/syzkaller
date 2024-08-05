@@ -117,7 +117,7 @@ Third, configure bridged networking and DHCP for the VM instances.  I have not t
 ```console
 # ifconfig bridge create
 bridge0
-# ifconfig bridge0 inet 169.254.0.1
+# ifconfig bridge0 inet 169.254.0.1/24
 # echo 'dhcp-range=169.254.0.2,169.254.0.254,255.255.255.0' > /usr/local/etc/dnsmasq.conf
 # echo 'interface=bridge0' >> /usr/local/etc/dnsmasq.conf
 # sysrc dnsmasq_enable=YES
