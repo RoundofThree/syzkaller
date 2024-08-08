@@ -139,10 +139,6 @@ const int kInitialOutput = 14 << 20;
 const int kMaxOutput = kInitialOutput;
 #endif
 
-extern void *syz_data_ptr;
-
-#define SYZ_DATA_PTR syz_data_ptr
-
 // For use with flatrpc bit flags.
 template <typename T>
 bool IsSet(T flags, T f)
@@ -255,6 +251,10 @@ const int kInFd = 3;
 const int kOutFd = 4;
 const int kMaxSignalFd = 5;
 const int kCoverFilterFd = 6;
+
+void *syz_data_ptr;
+#define SYZ_DATA_PTR syz_data_ptr
+
 #if GOARCH_morello_purecap
 static void* reserved_output_data;  // bearing SW_VMEM permission
 #endif
