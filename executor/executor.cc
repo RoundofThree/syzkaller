@@ -113,6 +113,16 @@ static void reply_execute(uint32 status);
 static void receive_handshake();
 
 #if SYZ_EXECUTOR_USES_FORK_SERVER
+
+#if GOARCH_morello_purecap
+// Allocating (and forking) virtual memory for each executed process is expensive, so we only mmap
+// the amount we might possibly need for the specific received prog.
+const int kMaxOutputComparisons = 14 << 20; // executions with comparsions enabled are usually < 1% of all executions
+const int kMaxOutputCoverage = 6 << 20; // coverage is needed in ~ up to 1/3 of all executions (depending on corpus rotation)
+const int kMaxOutputSignal = 4 << 20;
+const int kInitialOutput = kMaxOutputComparisons; // it's not trivial to expand capability bounds so prepare for the worst
+const int kMaxOutput = kMaxOutputComparisons;
+#else
 // Allocating (and forking) virtual memory for each executed process is expensive, so we only mmap
 // the amount we might possibly need for the specific received prog.
 const int kMaxOutputComparisons = 14 << 20; // executions with comparsions enabled are usually < 1% of all executions
@@ -121,6 +131,8 @@ const int kMaxOutputSignal = 4 << 20;
 const int kMinOutput = 256 << 10; // if we don't need to send signal, the output is rather short.
 const int kInitialOutput = kMinOutput; // the minimal size to be allocated in the parent process
 const int kMaxOutput = kMaxOutputComparisons;
+#endif
+
 #else
 // We don't fork and allocate the memory only once, so prepare for the worst case.
 const int kInitialOutput = 14 << 20;
@@ -474,8 +486,10 @@ static std::tuple<rpc::ComparisonRaw, bool, bool> convert(const kcov_comparison_
 #include "executor_linux.h"
 #elif GOOS_fuchsia
 #include "executor_fuchsia.h"
-#elif GOOS_freebsd || GOOS_cheribsd || GOOS_netbsd || GOOS_openbsd
+#elif GOOS_freebsd || GOOS_netbsd || GOOS_openbsd
 #include "executor_bsd.h"
+#elif GOOS_cheribsd
+#include "executor_cheribsd.h"
 #elif GOOS_darwin
 #include "executor_darwin.h"
 #elif GOOS_windows
@@ -532,13 +546,16 @@ int main(int argc, char** argv)
 
 	start_time_ms = current_time_ms();
 
+	// using a not null-derived hint to MAP_ANON is illegal in CheriABI
 	os_init(argc, argv, (char*)SYZ_DATA_OFFSET, SYZ_NUM_PAGES * SYZ_PAGE_SIZE);
 	current_thread = &threads[0];
 
-	void* mmap_out = mmap(NULL, kMaxInput, PROT_READ, MAP_SHARED, kInFd, 0);
-	if (mmap_out == MAP_FAILED)
-		fail("mmap of input file failed");
-	input_data = static_cast<uint8*>(mmap_out);
+	if (input_data == NULL) {
+		void* mmap_out = mmap(NULL, kMaxInput, PROT_READ, MAP_SHARED, kInFd, 0);
+		if (mmap_out == MAP_FAILED)
+			fail("mmap of input file failed");
+		input_data = static_cast<uint8*>(mmap_out);
+	}
 
 	mmap_output(kInitialOutput);
 	// Prevent test programs to mess with these fds.
@@ -633,11 +650,17 @@ int main(int argc, char** argv)
 }
 
 // This method can be invoked as many times as one likes - MMAP_FIXED can overwrite the previous
-// mapping without any problems. The only precondition - kOutFd must not be closed.
+// mapping without any problems, except in CheriBSD. The only precondition - kOutFd must not be closed.
+// In CheriBSD, you need a not null-derived capability to MAP_FIXED at an existing reservation.
+// To avoid to workaround to expand bounds, I'd mmap a big map instead...
 static void mmap_output(uint32 size)
 {
 	if (size <= output_size)
 		return;
+#if GOARCH_morello_purecap
+	if (output_size != 0)
+		failmsg("trying to expand output mmap bounds in CheriABI", "original size=%d,requested size=%d", output_size, size);
+#endif
 	if (size % SYZ_PAGE_SIZE != 0)
 		failmsg("trying to mmap output area that is not divisible by page size", "page=%d,area=%d", SYZ_PAGE_SIZE, size);
 	uint32* mmap_at = NULL;
@@ -1453,6 +1476,7 @@ void copyin_int(char* addr, uint64 val, uint64 bf, uint64 bf_off, uint64 bf_len)
 	*(T*)addr = swap(x, sizeof(T), bf);
 }
 
+// XXXR3: copyincap
 void copyin(char* addr, uint64 val, uint64 size, uint64 bf, uint64 bf_off, uint64 bf_len)
 {
 	debug_verbose("copyin: addr=%p val=0x%llx size=%llu bf=%llu bf_off=%llu bf_len=%llu\n",
