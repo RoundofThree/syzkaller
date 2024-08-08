@@ -255,6 +255,9 @@ const int kInFd = 3;
 const int kOutFd = 4;
 const int kMaxSignalFd = 5;
 const int kCoverFilterFd = 6;
+#if GOARCH_morello_purecap
+static void* reserved_output_data;  // bearing SW_VMEM permission
+#endif
 static OutputData* output_data;
 static std::optional<ShmemBuilder> output_builder;
 static uint32 output_size;
@@ -649,18 +652,44 @@ int main(int argc, char** argv)
 
 // This method can be invoked as many times as one likes - MMAP_FIXED can overwrite the previous
 // mapping without any problems, except in CheriBSD. The only precondition - kOutFd must not be closed.
-// In CheriBSD, you need a not null-derived capability to MAP_FIXED at an existing reservation.
-// To avoid to workaround to expand bounds, I'd mmap a big map instead...
+// In CheriBSD, you need to provide a not null-derived capability to MAP_FIXED at an existing reservation.
+// We reserve a capability to a big chunk of memory with MAP_GUARD (with SW_VMEM permission) and
+// expand it as it fits.
 static void mmap_output(uint32 size)
 {
 	if (size <= output_size)
 		return;
-#if GOARCH_morello_purecap
-	if (output_size != 0)
-		failmsg("trying to expand output mmap bounds in CheriABI", "original size=%d,requested size=%d", output_size, size);
-#endif
 	if (size % SYZ_PAGE_SIZE != 0)
 		failmsg("trying to mmap output area that is not divisible by page size", "page=%d,area=%d", SYZ_PAGE_SIZE, size);
+#if GOARCH_morello_purecap
+	if (reserved_output_data == NULL) {
+		ptraddr_t mmap_at = NULL;
+		if (kAddressSanitizer) {
+			// ASan allows user mappings only at some specific address ranges,
+			// so we don't randomize. But we also assume 64-bits and that we are running tests.
+			mmap_at = (ptraddr_t)0x7f0000000000ull;
+		} else {
+			// It's the first time we map output region - generate its location.
+			// The output region is the only thing in executor process for which consistency matters.
+			// If it is corrupted ipc package will fail to parse its contents and panic.
+			// But fuzzer constantly invents new ways of how to corrupt the region,
+			// so we map the region at a (hopefully) hard to guess address with random offset,
+			// surrounded by unmapped pages.
+			// The address chosen must also work on 32-bit kernels with 1GB user address space.
+			const ptraddr_t kOutputBase = 0x1b2bc20000ull;
+			mmap_at = kOutputBase + (1 << 20) * (getpid() % 128);
+		}
+		reserved_output_data = mmap((void*)mmap_at, kMaxOutput,
+					PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED | MAP_GUARD, kOutFd, 0);
+	}
+	// expand using the reserved capability
+	if (size > cheri_getlen(reserved_output_data))
+		failmsg("trying to expand output mmap bounds in CheriABI", "original size=%d,requested size=%d", cheri_getlen(reserved_output_data), size);
+	void* result = mmap(reserved_output_data, size, 
+			PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, kOutFd, 0);
+	output_data = static_cast<OutputData*>(result);
+	output_size = size;
+#else
 	uint32* mmap_at = NULL;
 	if (output_data == NULL) {
 		if (kAddressSanitizer) {
@@ -684,21 +713,14 @@ static void mmap_output(uint32 size)
 		// There exists a mremap call that could have helped, but it's purely Linux-specific.
 		mmap_at = (uint32*)((char*)(output_data) + output_size);
 	}
-#if GOARCH_morello_purecap
-	mmap_at = (uint32*)((char*)0ull + (uint64)mmap_at);
-	void* result = mmap(mmap_at, size,
-			    PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, kOutFd, 0);
-#else
 	void* result = mmap(mmap_at, size - output_size,
 			    PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, kOutFd, output_size);
-#endif
 	if (result == MAP_FAILED || (mmap_at && result != mmap_at))
 		failmsg("mmap of output file failed", "want %p, got %p", mmap_at, result);
-#if !GOARCH_morello_purecap
 	if (output_data == NULL)
-#endif
 		output_data = static_cast<OutputData*>(result);
 	output_size = size;
+#endif
 }
 
 void setup_control_pipes()
