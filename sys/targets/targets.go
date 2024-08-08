@@ -555,7 +555,7 @@ var oses = map[string]osCommon{
 		SyscallPrefix:          "SYS_",
 		ExecutorUsesForkServer: true,
 		KernelObject:           "kernel.full",
-		CPP:                    "g++",
+		CPP:                    "clang++",
 		// FreeBSD is missing toolchain support for static PIEs.
 		cflags: []string{
 			"-static",
