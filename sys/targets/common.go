@@ -22,7 +22,7 @@ func MakePosixMmap(target *prog.Target, exec, contain bool) func() []*prog.Call 
 	const invalidFD = ^uint64(0)
 	makeMmap := func(addr, size, prot uint64) *prog.Call {
 		call := prog.MakeCall(meta, []prog.Arg{
-			prog.MakeVmaPointerArg(meta.Args[0].Type, prog.DirIn, addr, size),
+			prog.MakeVmaPointerArg(meta.Args[0].Type, prog.DirIn, addr, size), // XXXR3: this should be a null-derived capability
 			prog.MakeConstArg(meta.Args[1].Type, prog.DirIn, size),
 			prog.MakeConstArg(meta.Args[2].Type, prog.DirIn, prot),
 			prog.MakeConstArg(meta.Args[3].Type, prog.DirIn, flags),

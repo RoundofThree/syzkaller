@@ -252,12 +252,9 @@ const int kOutFd = 4;
 const int kMaxSignalFd = 5;
 const int kCoverFilterFd = 6;
 
-void *syz_data_ptr;
+extern void *syz_data_ptr;
 #define SYZ_DATA_PTR syz_data_ptr
 
-#if GOARCH_morello_purecap
-static void* reserved_output_data;  // bearing SW_VMEM permission
-#endif
 static OutputData* output_data;
 static std::optional<ShmemBuilder> output_builder;
 static uint32 output_size;
@@ -549,8 +546,13 @@ int main(int argc, char** argv)
 
 	start_time_ms = current_time_ms();
 
-	// using a not null-derived hint to MAP_ANON is illegal in CheriABI
+#if GOOS_cheribsd
+	// using a not null-derived untagged hint is illegal in CheriABI.
+	// For MAP_FIXED, we can also provide a valid capability.
+	os_init(argc, argv, (ptraddr_t)SYZ_DATA_OFFSET, SYZ_NUM_PAGES * SYZ_PAGE_SIZE);
+#else
 	os_init(argc, argv, (char*)SYZ_DATA_OFFSET, SYZ_NUM_PAGES * SYZ_PAGE_SIZE);
+#endif
 	current_thread = &threads[0];
 
 	void* mmap_out = mmap(NULL, kMaxInput, PROT_READ, MAP_SHARED, kInFd, 0);
@@ -641,11 +643,13 @@ int main(int argc, char** argv)
 	// As the result sandbox process will exit with exit status 9 instead of the executor
 	// exit status (notably kFailStatus). So we duplicate the exit status on the pipe.
 	reply_execute(status);
+	// munmap(SYZ_DATA_PTR, SYZ_NUM_PAGES * SYZ_PAGE_SIZE);
 	doexit(status);
 	// Unreachable.
 	return 1;
-#else
+#else	
 	reply_execute(status);
+	// munmap(SYZ_DATA_PTR, SYZ_NUM_PAGES * SYZ_PAGE_SIZE);
 	return status;
 #endif
 }
@@ -662,8 +666,9 @@ static void mmap_output(uint32 size)
 	if (size % SYZ_PAGE_SIZE != 0)
 		failmsg("trying to mmap output area that is not divisible by page size", "page=%d,area=%d", SYZ_PAGE_SIZE, size);
 #if GOARCH_morello_purecap
-	if (reserved_output_data == NULL) {
-		ptraddr_t mmap_at = NULL;
+	void* result;
+	ptraddr_t mmap_at;
+	if (output_data == NULL) {
 		if (kAddressSanitizer) {
 			// ASan allows user mappings only at some specific address ranges,
 			// so we don't randomize. But we also assume 64-bits and that we are running tests.
@@ -679,14 +684,16 @@ static void mmap_output(uint32 size)
 			const ptraddr_t kOutputBase = 0x1b2bc20000ull;
 			mmap_at = kOutputBase + (1 << 20) * (getpid() % 128);
 		}
-		reserved_output_data = mmap((void*)mmap_at, kMaxOutput,
-					PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED | MAP_GUARD, kOutFd, 0);
+	} else {
+		// remap and expand
+		mmap_at = cheri_getaddress(output_data);
+		munmap(output_data, output_size);
 	}
-	// expand using the reserved capability
-	if (size > cheri_getlen(reserved_output_data))
-		failmsg("trying to expand output mmap bounds in CheriABI", "original size=%d,requested size=%d", cheri_getlen(reserved_output_data), size);
-	void* result = mmap(reserved_output_data, size, 
-			PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, kOutFd, 0);
+	result = mmap((void*)(uintptr_t)mmap_at, size,
+				PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, kOutFd, 0);
+	if (result == MAP_FAILED) {
+		failmsg("mmap output_data unsuccessful", "mmap_at=%lu", mmap_at);
+	}
 	output_data = static_cast<OutputData*>(result);
 	output_size = size;
 #else

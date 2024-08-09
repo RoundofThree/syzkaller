@@ -4,6 +4,12 @@
 include <sys/types.h>
 include <sys/mman.h>
 
+# mmap has additional restrictions in CheriABI:
+## if hint is tagged, then it must be MAP_FIXED, containing CHERI_PERM_SW_VMEM and correct perms
+## if hint is untagged, it must be null-derived
+# munmap:
+## the provided capability must be tagged and containing CHERI_PERM_SW_VMEM
+
 mmap(addr vma, len len[addr], prot flags[mmap_prot], flags flags[mmap_flags], fd fd, offset fileoff)
 munmap(addr vma, len len[addr])
 mprotect(addr vma, len len[addr], prot flags[mmap_prot])

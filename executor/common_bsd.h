@@ -442,12 +442,17 @@ static void sandbox_common()
 	struct rlimit rlim;
 #if GOOS_freebsd || GOOS_cheribsd
 	// This also causes ENOMEM on NetBSD during early init.
-	rlim.rlim_cur = rlim.rlim_max = 128 << 20;
+#if SYZ_EXECUTOR
+	rlim.rlim_cur = rlim.rlim_max = (200 << 20) +
+					(kMaxThreads * kCoverSize) * sizeof(ptraddr_t);
+#else
+	rlim.rlim_cur = rlim.rlim_max = (200 << 20);
+#endif
 	setrlimit(RLIMIT_AS, &rlim);
 #endif
-	rlim.rlim_cur = rlim.rlim_max = 8 << 20;
+	rlim.rlim_cur = rlim.rlim_max = 32 << 20;
 	setrlimit(RLIMIT_MEMLOCK, &rlim);
-	rlim.rlim_cur = rlim.rlim_max = 1 << 20;
+	rlim.rlim_cur = rlim.rlim_max = 136 << 20;
 	setrlimit(RLIMIT_FSIZE, &rlim);
 	rlim.rlim_cur = rlim.rlim_max = 1 << 20;
 	setrlimit(RLIMIT_STACK, &rlim);

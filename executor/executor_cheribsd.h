@@ -16,9 +16,10 @@
 #include <cheri/cheri.h>
 #include <cheri/cheric.h>
 
-static void *syz_data_ptr = NULL;
+void *syz_data_ptr = NULL;
 
-static void os_init(int argc, char** argv, intptr_t data, size_t data_size)
+// this matches the golang counterpart
+static void os_init(int argc, char** argv, ptraddr_t data, size_t data_size)
 {
 	int prot = PROT_READ | PROT_WRITE | PROT_EXEC;
 	int flags = MAP_PRIVATE | MAP_ANON | MAP_FIXED;
@@ -28,12 +29,12 @@ static void os_init(int argc, char** argv, intptr_t data, size_t data_size)
 			// munmap and mmap again because we didn't munmap the previous process mapping?
 			munmap(syz_data_ptr, cheri_getlen(syz_data_ptr));
 			// null-derived capability is needed (see CheriABI mmap manpage)
-			syz_data_ptr = mmap((void*)data, data_size, prot, flags, -1, 0);
+			syz_data_ptr = mmap((void*)(uintptr_t)data, data_size, prot, flags, -1, 0);
 		}
 		// good to go
 	} else {
 		// first time mmapping
-		syz_data_ptr = mmap((void*)data, data_size, prot, flags, -1, 0);
+		syz_data_ptr = mmap((void*)(uintptr_t)data, data_size, prot, flags, -1, 0);
 	}
 
 	// Makes sure the file descriptor limit is sufficient to map control pipes.
@@ -84,7 +85,7 @@ static void cover_mmap(cover_t* cov)
 
 static void cover_protect(cover_t* cov)
 {
-// hack: no-op for cheribsd
+// hack: no-op for cheribsd for now
 #if 0
 	size_t mmap_alloc_size = kCoverSize * KCOV_ENTRY_SIZE;
 	long page_size = sysconf(_SC_PAGESIZE);
@@ -96,7 +97,7 @@ static void cover_protect(cover_t* cov)
 
 static void cover_unprotect(cover_t* cov)
 {
-// hack: no-op for cheribsd
+// hack: no-op for cheribsd for now
 #if 0
 	size_t mmap_alloc_size = kCoverSize * KCOV_ENTRY_SIZE;
 	mprotect(cov->data, mmap_alloc_size, PROT_READ | PROT_WRITE);
